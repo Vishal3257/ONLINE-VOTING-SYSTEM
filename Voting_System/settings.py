@@ -19,7 +19,7 @@ SECRET_KEY = 'django-insecure-9m%d+0(kb!)f=($sfxld#@g!s#r3+7by%2)*+a6il+-p4&p4i(
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['online-voting-system-x4i2.onrender.com', 'localhost', '127.0.0.1', '*']
 
 
 # Application definition
