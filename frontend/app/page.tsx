@@ -19,9 +19,9 @@ export default function Home() {
     }
   }, [router]);
 
+  // CRITICAL FIX: Next.js needs a return statement to render a valid component root
   return (
     <div className="flex h-screen w-screen items-center justify-center bg-zinc-50 dark:bg-black">
-      {/* Show loader while checking authentication and redirecting */}
       <div className="text-center">
         <div className="h-10 w-10 animate-spin rounded-full border-4 border-zinc-300 border-t-black dark:border-zinc-700 dark:border-t-white mx-auto"></div>
         <p className="mt-4 text-sm text-zinc-500 dark:text-zinc-400 font-sans">Loading Voting System...</p>
