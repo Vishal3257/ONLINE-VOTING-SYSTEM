@@ -1,0 +1,1 @@
+web: gunicorn Voting_System.wsgi
