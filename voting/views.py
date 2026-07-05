@@ -33,7 +33,9 @@ class RegisterView(APIView):
 
 # 2. ─── CANDIDATE LIST VIEW ───
 class CandidateListView(APIView):
+    # Overriding any global permission settings explicitly
     permission_classes = [AllowAny]
+    authentication_classes = [] 
 
     def get(self, request):
         candidates = Candidate.objects.all()

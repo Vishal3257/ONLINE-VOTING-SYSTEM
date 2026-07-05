@@ -156,14 +156,16 @@ STORAGES = {
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 
-# --- EMAIL CONFIGURATION FOR DEPLOYMENT (RENDER COMPATIBLE) ---
+
+
+# --- EMAIL CONFIGURATION FOR DEPLOYMENT ---
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
 
-# Use Port 587 for TLS, as port 465/SSL is often blocked by hosting providers like Render
-EMAIL_PORT = 587  
-EMAIL_USE_TLS = True  
-EMAIL_USE_SSL = False  
+# Dynamically fetching settings with fallback defaults
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT', 587))
+EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True') == 'True'
+EMAIL_USE_SSL = os.environ.get('EMAIL_USE_SSL', 'False') == 'True' 
 
 # Ensure this matches your actual Gmail address used in views.py
 EMAIL_HOST_USER = 'vt464670@gmail.com'  
