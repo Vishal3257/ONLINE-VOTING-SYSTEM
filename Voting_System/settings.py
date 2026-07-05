@@ -162,4 +162,4 @@ EMAIL_PORT = 465
 EMAIL_USE_TLS = False
 EMAIL_USE_SSL = True
 EMAIL_HOST_USER = 'vt464670@gmail.com'      
-EMAIL_HOST_PASSWORD = 'eivf icvq nmlm jioy'
+EMAIL_HOST_PASSWORD = 'nbjd fvif vvap mamf'
