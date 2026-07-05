@@ -25,11 +25,23 @@ export default function Dashboard() {
     const handleVote = async (candidateId) => {
         setMessage(''); setError('');
         try {
-            const response = await apiRequest('cast-vote/', 'POST', { candidate: candidateId });
-            setMessage(`🎉 ${response.message}`);
+            // API पर रिक्वेस्ट भेजी
+            const response = await apiRequest('cast-vote/', 'POST', { candidate_id: candidateId });
+            
+            setMessage(`🎉 ${response.message || 'Vote casted successfully!'}`);
             fetchCandidates(); 
+
+            // ─── AUTO LOGOUT LOGIC FOR MULTI-USER BOOTH ───
+            // 1. ब्राउज़र से तुरंत टोकन हटाओ ताकि सेशन क्लोज हो जाए
+            localStorage.removeItem('token'); 
+            
+            // 2. थोड़ा सा डिले (800ms) दिया है ताकि यूजर को "Success Message" दिख जाए, फिर लॉगिन पर भेज दो
+            setTimeout(() => {
+                window.location.href = '/login';
+            }, 800);
+
         } catch (err) {
-            setError(`❌ ${err.message}`);
+            setError(`❌ ${err.message || 'Something went wrong'}`);
         }
     };
 
@@ -64,11 +76,11 @@ export default function Dashboard() {
                                     
                                     {/* Vote Counter Badge */}
                                     <div className="my-6 inline-flex flex-col items-center justify-center w-28 h-28 rounded-full bg-slate-50 border border-gray-100 shadow-inner">
-                                        <span className="text-3xl font-black text-slate-800">{candidate.vote_count}</span>
+                                        <span className="text-3xl font-black text-slate-800">{candidate.votes || candidate.vote_count || 0}</span>
                                         <span className="text-[10px] uppercase tracking-widest text-gray-500 font-bold mt-1">Live Votes</span>
                                     </div>
                                     
-                                    {/* ─── NEW: Supporters/Voters List Area ─── */}
+                                    {/* Supporters/Voters List Area */}
                                     <div className="mb-6 text-left bg-slate-50 p-4 rounded-xl border border-gray-100 min-h-[90px]">
                                         <h4 className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">Supporters Area ({candidate.voters?.length || 0})</h4>
                                         <div className="flex flex-wrap gap-2">
@@ -83,13 +95,12 @@ export default function Dashboard() {
                                             )}
                                         </div>
                                     </div>
-                                    {/* ────────────────────────────────────── */}
                                     
                                     <button 
                                         onClick={() => handleVote(candidate.id)}
                                         className={`w-full py-4 text-white font-bold rounded-xl text-lg shadow-lg tracking-wide transition ${isBJP ? 'bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 shadow-orange-500/20' : 'bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 shadow-blue-500/20'}`}
                                     >
-                                        Vote for {candidate.party}
+                                        Vote for {candidate.party || 'Candidate'}
                                     </button>
                                 </div>
                             </div>
