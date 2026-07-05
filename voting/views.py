@@ -1,4 +1,5 @@
 import threading
+import traceback
 from django.core.mail import send_mail, send_mass_mail
 from django.db.models import Count
 from rest_framework.views import APIView
@@ -7,7 +8,7 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from .models import Candidate, CustomUser, Vote  # Ensure your model names match exactly
 
-# 1. ─── REGISTER VIEW (ADDED BACK) ───
+# 1. ─── REGISTER VIEW ───
 class RegisterView(APIView):
     permission_classes = [AllowAny]
 
@@ -65,6 +66,7 @@ class CastVoteView(APIView):
 
         # Background Email Threading
         def send_vote_email():
+            print(f"--- DEBUG CAST VOTE: Trying to send email to {user.email} ---")
             try:
                 send_mail(
                     subject="Vote Casted Successfully! 🗳️",
@@ -73,9 +75,11 @@ class CastVoteView(APIView):
                     recipient_list=[user.email],
                     fail_silently=False,
                 )
-                print(f"Success Email sent to {user.email}")
+                print(f"=== DEBUG CAST VOTE: Success Email sent to {user.email} ===")
             except Exception as e:
-                print(f"Background Email Failed: {e}")
+                print(f"=== DEBUG CAST VOTE CRITICAL ERROR ===")
+                print(f"Error Message: {str(e)}")
+                traceback.print_exc()
 
         threading.Thread(target=send_vote_email).start()
 
@@ -151,10 +155,15 @@ class ElectionResultView(APIView):
         if is_draw or max_votes <= 0:
             return Response({"error": "Cannot declare winner. It's a tie or no votes casted yet."}, status=status.HTTP_400_BAD_REQUEST)
 
-        voters_emails = list(CustomUser.objects.filter(has_voted=True).values_list('email', flat=True))
+        
+        voters_emails = list(CustomUser.objects.filter(has_voted=True).exclude(email="").values_list('email', flat=True))
+
+        print(f"--- DEBUG BULK EMAIL: Total emails found in DB: {len(voters_emails)} ---")
+        print(f"--- DEBUG BULK EMAIL: Recipients List -> {voters_emails} ---")
 
         if not voters_emails:
-            return Response({"message": "No voters found to email."}, status=status.HTTP_200_OK)
+            print("--- DEBUG BULK EMAIL: No active voter emails found to blast! ---")
+            return Response({"message": "No voters found with valid email addresses."}, status=status.HTTP_200_OK)
 
         def send_bulk_winner_email():
             try:
@@ -164,10 +173,13 @@ class ElectionResultView(APIView):
                     'vt464670@gmail.com',
                     voters_emails
                 )
+                
                 send_mass_mail((message,), fail_silently=False)
-                print(f"Bulk winner email successfully sent to {len(voters_emails)} voters!")
+                print(f"=== DEBUG BULK EMAIL: Successfully sent to {len(voters_emails)} voters! ===")
             except Exception as e:
-                print(f"Bulk Email Blast Failed: {e}")
+                print(f"=== DEBUG BULK EMAIL CRITICAL ERROR ===")
+                print(f"Error Message: {str(e)}")
+                traceback.print_exc()
 
         threading.Thread(target=send_bulk_winner_email).start()
 
