@@ -159,17 +159,17 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 
 # --- EMAIL CONFIGURATION FOR DEPLOYMENT ---
+import os
+
+# --- EMAIL CONFIGURATION FOR DEPLOYMENT ---
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
 
-# Dynamically fetching settings with fallback defaults
+# Dynamically fetching settings with fallback defaults for Render
 EMAIL_PORT = int(os.environ.get('EMAIL_PORT', 587))
 EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True') == 'True'
-EMAIL_USE_SSL = os.environ.get('EMAIL_USE_SSL', 'False') == 'True' 
+EMAIL_USE_SSL = os.environ.get('EMAIL_USE_SSL', 'False') == 'True'
 
-# Ensure this matches your actual Gmail address used in views.py
-EMAIL_HOST_USER = 'vt464670@gmail.com'  
-
-# Paste your 16-character Google App Password here without any spaces
-EMAIL_HOST_PASSWORD = 'nbjd fvif vvap mamf'
-
+# Fetching credentials securely from environment variables to prevent leaks
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', 'vt464670@gmail.com')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD')  # No hardcoded password here
