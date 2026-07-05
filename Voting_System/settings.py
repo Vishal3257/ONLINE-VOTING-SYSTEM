@@ -156,10 +156,18 @@ STORAGES = {
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 
+# --- EMAIL CONFIGURATION FOR DEPLOYMENT (RENDER COMPATIBLE) ---
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
-EMAIL_PORT = 465
-EMAIL_USE_TLS = False
-EMAIL_USE_SSL = True
-EMAIL_HOST_USER = 'vt464670@gmail.com'      
+
+# Use Port 587 for TLS, as port 465/SSL is often blocked by hosting providers like Render
+EMAIL_PORT = 587  
+EMAIL_USE_TLS = True  
+EMAIL_USE_SSL = False  
+
+# Ensure this matches your actual Gmail address used in views.py
+EMAIL_HOST_USER = 'vt464670@gmail.com'  
+
+# Paste your 16-character Google App Password here without any spaces
 EMAIL_HOST_PASSWORD = 'nbjd fvif vvap mamf'
+
