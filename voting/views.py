@@ -1,12 +1,14 @@
 import threading
 import traceback
-from django.core.mail import send_mail, send_mass_mail
+import os
+from django.core.mail import get_connection, EmailMessage, send_mail
 from django.db.models import Count
+from django.http import JsonResponse
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated, AllowAny
-from .models import Candidate, CustomUser, Vote  # Ensure your model names match exactly
+from .models import Candidate, CustomUser, Vote  
 
 # 1. ─── REGISTER VIEW ───
 class RegisterView(APIView):
@@ -26,14 +28,13 @@ class RegisterView(APIView):
         if CustomUser.objects.filter(email=email).exists():
             return Response({"error": "Email already registered."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Create new user
+        # Create new user safely
         user = CustomUser.objects.create_user(username=username, email=email, password=password)
         return Response({"message": "User registered successfully! Please log in."}, status=status.HTTP_201_CREATED)
 
 
 # 2. ─── CANDIDATE LIST VIEW ───
 class CandidateListView(APIView):
-    # Overriding any global permission settings explicitly
     permission_classes = [AllowAny]
     authentication_classes = [] 
 
@@ -43,7 +44,7 @@ class CandidateListView(APIView):
         return Response(data, status=status.HTTP_200_OK)
 
 
-# 3. ─── VOTE CAST VIEW (WITH BACKGROUND EMAIL THREADING) ───
+# 3. ─── VOTE CAST VIEW (WITH FIXED SMTP BACKGROUND THREAD) ───
 class CastVoteView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -66,17 +67,28 @@ class CastVoteView(APIView):
         user.has_voted = True
         user.save()
 
-        # Background Email Threading
+        # Secure Background Thread for Single Email
         def send_vote_email():
             print(f"--- DEBUG CAST VOTE: Trying to send email to {user.email} ---")
             try:
-                send_mail(
-                    subject="Vote Casted Successfully! 🗳️",
-                    message=f"Hi {user.username},\n\nYour valuable vote has been successfully registered for {candidate.name}.\n\nThank you for participating!",
-                    from_email='vt464670@gmail.com',
-                    recipient_list=[user.email],
-                    fail_silently=False,
+                # Forcing explicit SMTP connection inside the thread
+                connection = get_connection(
+                    backend='django.core.mail.backends.smtp.EmailBackend',
+                    host='smtp.gmail.com',
+                    port=587,
+                    username=os.environ.get('EMAIL_HOST_USER', 'vt464670@gmail.com'),
+                    password=os.environ.get('EMAIL_HOST_PASSWORD'),
+                    use_tls=True
                 )
+                
+                email = EmailMessage(
+                    subject="Vote Casted Successfully! 🗳️",
+                    body=f"Hi {user.username},\n\nYour valuable vote has been successfully registered for {candidate.name}.\n\nThank you for participating!",
+                    from_email=os.environ.get('EMAIL_HOST_USER', 'vt464670@gmail.com'),
+                    to=[user.email],
+                    connection=connection
+                )
+                email.send(fail_silently=False)
                 print(f"=== DEBUG CAST VOTE: Success Email sent to {user.email} ===")
             except Exception as e:
                 print(f"=== DEBUG CAST VOTE CRITICAL ERROR ===")
@@ -84,7 +96,6 @@ class CastVoteView(APIView):
                 traceback.print_exc()
 
         threading.Thread(target=send_vote_email).start()
-
         return Response({"message": "Vote casted successfully! Redirecting..."}, status=status.HTTP_200_OK)
 
 
@@ -157,26 +168,36 @@ class ElectionResultView(APIView):
         if is_draw or max_votes <= 0:
             return Response({"error": "Cannot declare winner. It's a tie or no votes casted yet."}, status=status.HTTP_400_BAD_REQUEST)
 
-        
+        # Fetching dynamic clean list of emails
         voters_emails = list(CustomUser.objects.filter(has_voted=True).exclude(email="").values_list('email', flat=True))
 
         print(f"--- DEBUG BULK EMAIL: Total emails found in DB: {len(voters_emails)} ---")
         print(f"--- DEBUG BULK EMAIL: Recipients List -> {voters_emails} ---")
 
         if not voters_emails:
-            print("--- DEBUG BULK EMAIL: No active voter emails found to blast! ---")
             return Response({"message": "No voters found with valid email addresses."}, status=status.HTTP_200_OK)
 
+        # Secure Background Thread for Bulk Emails
         def send_bulk_winner_email():
             try:
-                message = (
-                    "Final Election Results Are Out! 🏆",
-                    f"Dear Voter,\n\nThe results for the Online Voting System have been declared.\n\n🎉 WINNER: {winner.name} with {max_votes} votes!\n\nThank you for making your vote count.",
-                    'vt464670@gmail.com',
-                    voters_emails
+                # Force dynamic SMTP backend parameters inside the isolated thread execution
+                connection = get_connection(
+                    backend='django.core.mail.backends.smtp.EmailBackend',
+                    host='smtp.gmail.com',
+                    port=587,
+                    username=os.environ.get('EMAIL_HOST_USER', 'vt464670@gmail.com'),
+                    password=os.environ.get('EMAIL_HOST_PASSWORD'),
+                    use_tls=True
                 )
-                
-                send_mass_mail((message,), fail_silently=False)
+
+                email = EmailMessage(
+                    subject="Final Election Results Are Out! 🏆",
+                    body=f"Dear Voter,\n\nThe results for the Online Voting System have been declared.\n\n🎉 WINNER: {winner.name} with {max_votes} votes!\n\nThank you for making your vote count.",
+                    from_email=os.environ.get('EMAIL_HOST_USER', 'vt464670@gmail.com'),
+                    to=voters_emails,  # Handles multiple recipients safely via mass SMTP backend connection
+                    connection=connection
+                )
+                email.send(fail_silently=False)
                 print(f"=== DEBUG BULK EMAIL: Successfully sent to {len(voters_emails)} voters! ===")
             except Exception as e:
                 print(f"=== DEBUG BULK EMAIL CRITICAL ERROR ===")
@@ -184,5 +205,4 @@ class ElectionResultView(APIView):
                 traceback.print_exc()
 
         threading.Thread(target=send_bulk_winner_email).start()
-
         return Response({"message": f"Result announced! Email blast started for {len(voters_emails)} voters."}, status=status.HTTP_200_OK)
