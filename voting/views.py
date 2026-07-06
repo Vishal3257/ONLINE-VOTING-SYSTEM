@@ -17,13 +17,9 @@ from .models import Candidate, CustomUser, Vote
 
 
 # ─── 100% ISOLATED BACKGROUND EMAIL FUNCTION (NO DB TOUCH) ───
+# ─── 100% ISOLATED BACKGROUND EMAIL FUNCTION (WITH LOGGING) ───
 def send_email_in_background(winner_name, max_votes, email_list, host_user, host_password):
-    """
-    This function runs completely independently in the background.
-    It doesn't touch the database, preventing Gunicorn from timing out or memory leaking.
-    """
     try:
-        # Strict 5-second connection timeout to ensure safety on Render's free tier
         connection = get_connection(
             backend='django.core.mail.backends.smtp.EmailBackend',
             host='smtp.gmail.com',
@@ -31,7 +27,7 @@ def send_email_in_background(winner_name, max_votes, email_list, host_user, host
             username=host_user,
             password=host_password,
             use_tls=True,
-            timeout=5  
+            timeout=10  
         )
 
         email = EmailMessage(
@@ -41,10 +37,14 @@ def send_email_in_background(winner_name, max_votes, email_list, host_user, host
             to=email_list,
             connection=connection
         )
-        email.send(fail_silently=True)
+        # fail_silently=False किया ताकि एरर छुपने के बजाय Logs में दिखाई दे
+        email.send(fail_silently=False) 
         print("=== BACKGROUND BULK EMAIL DISPATCHED SUCCESSFULLY ===")
     except Exception as e:
-        print(f"Background email failed or skipped: {str(e)}")
+        # यहाँ असली एरर प्रिंट होगा जो रेंडर के काले वाले Logs बॉक्स में दिखेगा
+        print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+        print(f"🔥 SMTP EMAIL ERROR DETECTED: {str(e)}")
+        print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 
 
 # 1. ─── REGISTER VIEW ───
