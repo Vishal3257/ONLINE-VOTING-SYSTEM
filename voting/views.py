@@ -16,6 +16,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .models import Candidate, CustomUser, Vote
+
 # 1. ─── REGISTER VIEW ───
 class RegisterView(APIView):
     permission_classes = [AllowAny]
@@ -105,9 +106,41 @@ class CastVoteView(APIView):
         return Response({"message": "Vote casted successfully! Redirecting..."}, status=status.HTTP_200_OK)
 
 
+# ─── HELPER FUNCTION FOR ASYNC BULK RESULTS EMAIL ───
+def send_bulk_result_emails_async(winner_name, max_votes, voters_emails):
+    """
+    Runs in a completely separate thread so Render never times out or throws 500.
+    """
+    try:
+        print(f"--- STARTING BACKGROUND EMAIL BLAST TO {len(voters_emails)} VOTERS ---")
+        
+        # Explicit SMTP Setup on Port 587 TLS (More stable on free hosting)
+        connection = get_connection(
+            backend='django.core.mail.backends.smtp.EmailBackend',
+            host='smtp.gmail.com',
+            port=587,
+            username=os.environ.get('EMAIL_HOST_USER', 'vt464670@gmail.com'),
+            password=os.environ.get('EMAIL_HOST_PASSWORD'),
+            use_tls=True
+        )
+
+        email = EmailMessage(
+            subject="Final Election Results Are Out! 🏆",
+            body=f"Dear Voter,\n\nThe results for the Online Voting System have been officially declared.\n\n🎉 WINNER: {winner_name} with {max_votes} votes!\n\nThank you for making your vote count.",
+            from_email=os.environ.get('EMAIL_HOST_USER', 'vt464670@gmail.com'),
+            to=voters_emails,
+            connection=connection
+        )
+        
+        email.send(fail_silently=False)
+        print("=== SUCCESS: ALL BACKGROUND BULK EMAILS SENT SUCCESSFULLY ===")
+    except Exception as e:
+        print("=== CRITICAL BACKGROUND SMTP BLOCKED ERROR ===")
+        print(f"The Real Error is: {str(e)}")
+        traceback.print_exc()
+
+
 # 4. ─── ELECTION RESULT & BULK EMAIL VIEW ───
-
-
 @api_view(['GET', 'POST'])
 @permission_classes([AllowAny])
 @authentication_classes([])
@@ -186,46 +219,24 @@ def election_result_view(request):
         if not voters_emails:
             return Response({"message": "No voters found with valid email addresses."}, status=status.HTTP_200_OK)
 
-        try:
-            print(f"--- ATTEMPTING DIRECT SMTP TO: {voters_emails} ---")
-            
-            # Port 465 SSL configuration
-            connection = get_connection(
-                backend='django.core.mail.backends.smtp.EmailBackend',
-                host='smtp.gmail.com',
-                port=465,
-                username=os.environ.get('EMAIL_HOST_USER', 'vt464670@gmail.com'),
-                password=os.environ.get('EMAIL_HOST_PASSWORD'),
-                use_tls=False,
-                use_ssl=True
-            )
-
-            email = EmailMessage(
-                subject="Final Election Results Are Out! 🏆",
-                body=f"Dear Voter,\n\nThe results for the Online Voting System have been declared.\n\n🎉 WINNER: {winner.name} with {max_votes} votes!\n\nThank you for making your vote count.",
-                from_email=os.environ.get('EMAIL_HOST_USER', 'vt464670@gmail.com'),
-                to=voters_emails,
-                connection=connection
-            )
-            
-            email.send(fail_silently=False)
-            print("=== SUCCESS: ALL EMAILS SENT SUCCESSFULLY ===")
-            
-            return Response({"message": f"Result announced! Email sent successfully to {len(voters_emails)} voters."}, status=status.HTTP_200_OK)
-
-        except Exception as e:
-            print("=== CRITICAL SMTP BLOCKED ERROR ===")
-            print(f"The Real Error is: {str(e)}")
-            traceback.print_exc()
-            return Response({"error": f"Email failed to send: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        # 🎯 FIX: Offloading Bulk Email Blast to Background Thread to prevent Gunicorn Worker Timeout
+        email_thread = threading.Thread(
+            target=send_bulk_result_emails_async,
+            args=(winner.name, max_votes, voters_emails)
+        )
+        email_thread.start()
         
+        # Instantly respond to front-end to avoid loading spinners or crashes
+        return Response({
+            "status": "success",
+            "message": f"Result process initiated! Sending bulk emails to {len(voters_emails)} voters in the background."
+        }, status=status.HTTP_200_OK)
 
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def create_admin_backup(request):
     try:
-        
         if not CustomUser.objects.filter(username="VISHAL").exists():
             user = CustomUser.objects.create_superuser(
                 username="VISHAL",
@@ -235,4 +246,4 @@ def create_admin_backup(request):
             return Response({"msg": "Superuser created successfully!"}, status=200)
         return Response({"msg": "User already exists!"}, status=200)
     except Exception as e:
-        return Response({"error": str(e)}, status=500)        
+        return Response({"error": str(e)}, status=500)
