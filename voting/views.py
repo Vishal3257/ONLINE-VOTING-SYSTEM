@@ -1,3 +1,5 @@
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
 import threading
 import traceback
 import os
@@ -100,9 +102,10 @@ class CastVoteView(APIView):
 
 
 # 4. ─── ELECTION RESULT & BULK EMAIL VIEW ───
+@method_decorator(csrf_exempt, name='dispatch')
 class ElectionResultView(APIView):
     permission_classes = [AllowAny]
-
+    authentication_classes = [] # Ensure no session authentication blocks it
     def get(self, request):
         candidates = Candidate.objects.all()
         if not candidates.exists():
