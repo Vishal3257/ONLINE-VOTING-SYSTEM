@@ -168,41 +168,46 @@ class ElectionResultView(APIView):
         if is_draw or max_votes <= 0:
             return Response({"error": "Cannot declare winner. It's a tie or no votes casted yet."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Fetching dynamic clean list of emails
+        # Clean list of target emails
         voters_emails = list(CustomUser.objects.filter(has_voted=True).exclude(email="").values_list('email', flat=True))
-
-        print(f"--- DEBUG BULK EMAIL: Total emails found in DB: {len(voters_emails)} ---")
-        print(f"--- DEBUG BULK EMAIL: Recipients List -> {voters_emails} ---")
 
         if not voters_emails:
             return Response({"message": "No voters found with valid email addresses."}, status=status.HTTP_200_OK)
 
-        # Secure Background Thread for Bulk Emails
-        def send_bulk_winner_email():
-            try:
-                # Force dynamic SMTP backend parameters inside the isolated thread execution
-                connection = get_connection(
-                    backend='django.core.mail.backends.smtp.EmailBackend',
-                    host='smtp.gmail.com',
-                    port=587,
-                    username=os.environ.get('EMAIL_HOST_USER', 'vt464670@gmail.com'),
-                    password=os.environ.get('EMAIL_HOST_PASSWORD'),
-                    use_tls=True
-                )
+        # NO THREADING! Direct Execution to catch the real hidden error
+        try:
+            from django.core.mail import get_connection, EmailMessage
+            import os
 
-                email = EmailMessage(
-                    subject="Final Election Results Are Out! 🏆",
-                    body=f"Dear Voter,\n\nThe results for the Online Voting System have been declared.\n\n🎉 WINNER: {winner.name} with {max_votes} votes!\n\nThank you for making your vote count.",
-                    from_email=os.environ.get('EMAIL_HOST_USER', 'vt464670@gmail.com'),
-                    to=voters_emails,  # Handles multiple recipients safely via mass SMTP backend connection
-                    connection=connection
-                )
-                email.send(fail_silently=False)
-                print(f"=== DEBUG BULK EMAIL: Successfully sent to {len(voters_emails)} voters! ===")
-            except Exception as e:
-                print(f"=== DEBUG BULK EMAIL CRITICAL ERROR ===")
-                print(f"Error Message: {str(e)}")
-                traceback.print_exc()
+            print(f"--- ATTEMPTING DIRECT SMTP TO: {voters_emails} ---")
+            
+            # Forcing raw connection to bypass settings.py completely
+            connection = get_connection(
+                backend='django.core.mail.backends.smtp.EmailBackend',
+                host='smtp.gmail.com',
+                port=587,
+                username=os.environ.get('EMAIL_HOST_USER', 'vt464670@gmail.com'),
+                password=os.environ.get('EMAIL_HOST_PASSWORD'),
+                use_tls=True
+            )
 
-        threading.Thread(target=send_bulk_winner_email).start()
-        return Response({"message": f"Result announced! Email blast started for {len(voters_emails)} voters."}, status=status.HTTP_200_OK)
+            email = EmailMessage(
+                subject="Final Election Results Are Out! 🏆",
+                body=f"Dear Voter,\n\nThe results for the Online Voting System have been declared.\n\n🎉 WINNER: {winner.name} with {max_votes} votes!\n\nThank you for making your vote count.",
+                from_email=os.environ.get('EMAIL_HOST_USER', 'vt464670@gmail.com'),
+                to=voters_emails,
+                connection=connection
+            )
+            
+            # This will force Django to either send it right now or throw a clear exception
+            email.send(fail_silently=False)
+            print("=== SUCCESS: ALL EMAILS SENT SUCCESSFULLY FROM DIRECT SMTP ===")
+            
+            return Response({"message": f"Result announced! Email sent successfully to {len(voters_emails)} voters."}, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            print("=== CRITICAL SMTP BLOCKED ERROR ===")
+            print(f"The Real Error is: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return Response({"error": f"Email failed to send: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
