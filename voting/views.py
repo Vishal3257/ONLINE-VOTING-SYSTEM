@@ -105,7 +105,8 @@ class CastVoteView(APIView):
 @method_decorator(csrf_exempt, name='dispatch')
 class ElectionResultView(APIView):
     permission_classes = [AllowAny]
-    authentication_classes = [] # Ensure no session authentication blocks it
+    authentication_classes = [] # No session check to block headers
+
     def get(self, request):
         candidates = Candidate.objects.all()
         if not candidates.exists():
@@ -154,14 +155,7 @@ class ElectionResultView(APIView):
         }, status=status.HTTP_200_OK)
 
     def post(self, request):
-        # 1. CORS Preflight (OPTIONS) requests handler
-        if request.method == 'OPTIONS':
-            response = Response(status=status.HTTP_200_OK)
-            response["Access-Control-Allow-Origin"] = "https://online-voting-system-1eal.vercel.app"
-            response["Access-Control-Allow-Methods"] = "POST, GET, OPTIONS"
-            response["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-            return response
-
+        # Clean standard execution without manual OPTIONS/CORS code
         candidates = Candidate.objects.all()
         winner = None
         max_votes = -1
@@ -177,29 +171,23 @@ class ElectionResultView(APIView):
                 is_draw = True
 
         if is_draw or max_votes <= 0:
-            response = Response({"error": "Cannot declare winner. It's a tie or no votes casted yet."}, status=status.HTTP_400_BAD_REQUEST)
-            response["Access-Control-Allow-Origin"] = "https://online-voting-system-1eal.vercel.app"
-            return response
+            return Response({"error": "Cannot declare winner. It's a tie or no votes casted yet."}, status=status.HTTP_400_BAD_REQUEST)
 
         voters_emails = list(CustomUser.objects.filter(has_voted=True).exclude(email="").values_list('email', flat=True))
 
         if not voters_emails:
-            response = Response({"message": "No voters found with valid email addresses."}, status=status.HTTP_200_OK)
-            response["Access-Control-Allow-Origin"] = "https://online-voting-system-1eal.vercel.app"
-            return response
+            return Response({"message": "No voters found with valid email addresses."}, status=status.HTTP_200_OK)
 
-        # Direct SMTP Block with Forced CORS Headers on Response
         try:
             from django.core.mail import get_connection, EmailMessage
             import os
 
             print(f"--- ATTEMPTING DIRECT SMTP TO: {voters_emails} ---")
             
-            # Using Port 465 SSL which we configured earlier
             connection = get_connection(
                 backend='django.core.mail.backends.smtp.EmailBackend',
                 host='smtp.gmail.com',
-                port=465,
+                port=465,  # Secure SSL Port
                 username=os.environ.get('EMAIL_HOST_USER', 'vt464670@gmail.com'),
                 password=os.environ.get('EMAIL_HOST_PASSWORD'),
                 use_tls=False,
@@ -217,17 +205,11 @@ class ElectionResultView(APIView):
             email.send(fail_silently=False)
             print("=== SUCCESS: ALL EMAILS SENT SUCCESSFULLY ===")
             
-            response = Response({"message": f"Result announced! Email sent successfully to {len(voters_emails)} voters."}, status=status.HTTP_200_OK)
-            response["Access-Control-Allow-Origin"] = "https://online-voting-system-1eal.vercel.app"
-            return response
+            return Response({"message": f"Result announced! Email sent successfully to {len(voters_emails)} voters."}, status=status.HTTP_200_OK)
 
         except Exception as e:
             print("=== CRITICAL SMTP BLOCKED ERROR ===")
             print(f"The Real Error is: {str(e)}")
             import traceback
             traceback.print_exc()
-            
-            # Forcing CORS header even on crash/fail response so browser doesn't hide it
-            response = Response({"error": f"Email failed to send: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-            response["Access-Control-Allow-Origin"] = "https://online-voting-system-1eal.vercel.app"
-            return response
+            return Response({"error": f"Email failed to send: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

@@ -54,9 +54,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-# ─── CORS CONFIGURATION UPDATED ───
-# यहाँ हमने टेस्टिंग के लिए सब कुछ अलाउ कर दिया है ताकि वर्सेल से कनेक्शन तुरंत बन जाए!
-CORS_ALLOW_ALL_ORIGINS = True
+
 
 # अगर बाद में तुम सिर्फ वर्सेल को अलाउ करना चाहो तो नीचे वाली लाइन्स अनकमेंट कर सकते हो:
 # CORS_ALLOWED_ORIGINS = [
@@ -173,3 +171,9 @@ EMAIL_USE_SSL = os.environ.get('EMAIL_USE_SSL', 'False') == 'True'
 # Fetching credentials securely from environment variables to prevent leaks
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', 'vt464670@gmail.com')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD')  # No hardcoded password here
+
+
+# ─── CORS CONFIGURATION UPDATED ───
+
+CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_CREDENTIALS = True
