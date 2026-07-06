@@ -1,4 +1,5 @@
 import os
+import threading
 import traceback
 
 from django.core.mail import EmailMessage, get_connection
@@ -13,6 +14,38 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .models import Candidate, CustomUser, Vote
+
+
+# ─── 100% ISOLATED BACKGROUND EMAIL FUNCTION (NO DB TOUCH) ───
+def send_email_in_background(winner_name, max_votes, email_list, host_user, host_password):
+    """
+    This function runs completely independently in the background.
+    It doesn't touch the database, preventing Gunicorn from timing out or memory leaking.
+    """
+    try:
+        # Strict 5-second connection timeout to ensure safety on Render's free tier
+        connection = get_connection(
+            backend='django.core.mail.backends.smtp.EmailBackend',
+            host='smtp.gmail.com',
+            port=587,
+            username=host_user,
+            password=host_password,
+            use_tls=True,
+            timeout=5  
+        )
+
+        email = EmailMessage(
+            subject="🏆 Final Election Results Are Out! 🏆",
+            body=f"Dear Voter,\n\nThe results for the Online Voting System have been officially declared.\n\n🎉 WINNER: {winner_name} with {max_votes} votes!\n\nThank you for making your vote count.",
+            from_email=host_user,
+            to=email_list,
+            connection=connection
+        )
+        email.send(fail_silently=True)
+        print("=== BACKGROUND BULK EMAIL DISPATCHED SUCCESSFULLY ===")
+    except Exception as e:
+        print(f"Background email failed or skipped: {str(e)}")
+
 
 # 1. ─── REGISTER VIEW ───
 class RegisterView(APIView):
@@ -78,7 +111,8 @@ class CastVoteView(APIView):
                 port=587,
                 username=os.environ.get('EMAIL_HOST_USER', 'vt464670@gmail.com'),
                 password=os.environ.get('EMAIL_HOST_PASSWORD'),
-                use_tls=True
+                use_tls=True,
+                timeout=5
             )
             email = EmailMessage(
                 subject="Vote Casted Successfully! 🗳️",
@@ -164,34 +198,26 @@ def election_result_view(request):
         if is_draw or max_votes <= 0:
             return Response({"error": "Cannot declare winner. It's a tie or no votes casted yet."}, status=status.HTTP_400_BAD_REQUEST)
 
+        # Extract only the plain data needed before firing the thread (keeps DB clean)
         voters_emails = list(CustomUser.objects.filter(has_voted=True).exclude(email="").values_list('email', flat=True))
+        winner_name_str = str(winner.name)
+        
+        host_user = os.environ.get('EMAIL_HOST_USER', 'vt464670@gmail.com')
+        host_password = os.environ.get('EMAIL_HOST_PASSWORD')
 
-        # Direct and Lightweight Sending with fail_silently=True
+        # 🔥 LAUNCH BACKGROUND THREAD INSTANTLY
         if voters_emails:
-            try:
-                connection = get_connection(
-                    backend='django.core.mail.backends.smtp.EmailBackend',
-                    host='smtp.gmail.com',
-                    port=587,
-                    username=os.environ.get('EMAIL_HOST_USER', 'vt464670@gmail.com'),
-                    password=os.environ.get('EMAIL_HOST_PASSWORD'),
-                    use_tls=True
-                )
+            t = threading.Thread(
+                target=send_email_in_background,
+                args=(winner_name_str, max_votes, voters_emails, host_user, host_password)
+            )
+            t.daemon = True  # Allows it to execute independently from the request response cycle
+            t.start()
 
-                email = EmailMessage(
-                    subject="Final Election Results Are Out! 🏆",
-                    body=f"Dear Voter,\n\nThe results for the Online Voting System have been declared.\n\n🎉 WINNER: {winner.name} with {max_votes} votes!\n\nThank you for making your vote count.",
-                    from_email=os.environ.get('EMAIL_HOST_USER', 'vt464670@gmail.com'),
-                    to=voters_emails,
-                    connection=connection
-                )
-                email.send(fail_silently=True) # Prevent server crash if connection timeouts
-            except Exception:
-                pass
-
+        # 🔥 IMMEDIATE RESPONSE: Front-end is freed up instantly (No CORS/Gunicorn blocks)
         return Response({
             "status": "success",
-            "message": f"Result announced successfully! Bulk email processed."
+            "message": f"Result announced successfully! Bulk email processing started."
         }, status=status.HTTP_200_OK)
 
 
