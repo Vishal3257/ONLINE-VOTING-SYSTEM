@@ -154,6 +154,14 @@ class ElectionResultView(APIView):
         }, status=status.HTTP_200_OK)
 
     def post(self, request):
+        # 1. CORS Preflight (OPTIONS) requests handler
+        if request.method == 'OPTIONS':
+            response = Response(status=status.HTTP_200_OK)
+            response["Access-Control-Allow-Origin"] = "https://online-voting-system-1eal.vercel.app"
+            response["Access-Control-Allow-Methods"] = "POST, GET, OPTIONS"
+            response["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+            return response
+
         candidates = Candidate.objects.all()
         winner = None
         max_votes = -1
@@ -169,31 +177,33 @@ class ElectionResultView(APIView):
                 is_draw = True
 
         if is_draw or max_votes <= 0:
-            return Response({"error": "Cannot declare winner. It's a tie or no votes casted yet."}, status=status.HTTP_400_BAD_REQUEST)
+            response = Response({"error": "Cannot declare winner. It's a tie or no votes casted yet."}, status=status.HTTP_400_BAD_REQUEST)
+            response["Access-Control-Allow-Origin"] = "https://online-voting-system-1eal.vercel.app"
+            return response
 
-        # Clean list of target emails
         voters_emails = list(CustomUser.objects.filter(has_voted=True).exclude(email="").values_list('email', flat=True))
 
         if not voters_emails:
-            return Response({"message": "No voters found with valid email addresses."}, status=status.HTTP_200_OK)
+            response = Response({"message": "No voters found with valid email addresses."}, status=status.HTTP_200_OK)
+            response["Access-Control-Allow-Origin"] = "https://online-voting-system-1eal.vercel.app"
+            return response
 
-        # NO THREADING! Direct Execution to catch the real hidden error
+        # Direct SMTP Block with Forced CORS Headers on Response
         try:
             from django.core.mail import get_connection, EmailMessage
             import os
 
             print(f"--- ATTEMPTING DIRECT SMTP TO: {voters_emails} ---")
             
-            
-            # Force explicit SMTP configuration using SSL port 465
+            # Using Port 465 SSL which we configured earlier
             connection = get_connection(
                 backend='django.core.mail.backends.smtp.EmailBackend',
                 host='smtp.gmail.com',
-                port=465,  # Changed from 587 to 465
+                port=465,
                 username=os.environ.get('EMAIL_HOST_USER', 'vt464670@gmail.com'),
                 password=os.environ.get('EMAIL_HOST_PASSWORD'),
-                use_tls=False,  # Explicitly disabled TLS for SSL connection
-                use_ssl=True    # Enabled SSL
+                use_tls=False,
+                use_ssl=True
             )
 
             email = EmailMessage(
@@ -204,15 +214,20 @@ class ElectionResultView(APIView):
                 connection=connection
             )
             
-            # This will force Django to either send it right now or throw a clear exception
             email.send(fail_silently=False)
-            print("=== SUCCESS: ALL EMAILS SENT SUCCESSFULLY FROM DIRECT SMTP ===")
+            print("=== SUCCESS: ALL EMAILS SENT SUCCESSFULLY ===")
             
-            return Response({"message": f"Result announced! Email sent successfully to {len(voters_emails)} voters."}, status=status.HTTP_200_OK)
+            response = Response({"message": f"Result announced! Email sent successfully to {len(voters_emails)} voters."}, status=status.HTTP_200_OK)
+            response["Access-Control-Allow-Origin"] = "https://online-voting-system-1eal.vercel.app"
+            return response
 
         except Exception as e:
             print("=== CRITICAL SMTP BLOCKED ERROR ===")
             print(f"The Real Error is: {str(e)}")
             import traceback
             traceback.print_exc()
-            return Response({"error": f"Email failed to send: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+            # Forcing CORS header even on crash/fail response so browser doesn't hide it
+            response = Response({"error": f"Email failed to send: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            response["Access-Control-Allow-Origin"] = "https://online-voting-system-1eal.vercel.app"
+            return response
