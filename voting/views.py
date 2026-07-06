@@ -181,14 +181,16 @@ class ElectionResultView(APIView):
 
             print(f"--- ATTEMPTING DIRECT SMTP TO: {voters_emails} ---")
             
-            # Forcing raw connection to bypass settings.py completely
+            
+            # Force explicit SMTP configuration using SSL port 465
             connection = get_connection(
                 backend='django.core.mail.backends.smtp.EmailBackend',
                 host='smtp.gmail.com',
-                port=587,
+                port=465,  # Changed from 587 to 465
                 username=os.environ.get('EMAIL_HOST_USER', 'vt464670@gmail.com'),
                 password=os.environ.get('EMAIL_HOST_PASSWORD'),
-                use_tls=True
+                use_tls=False,  # Explicitly disabled TLS for SSL connection
+                use_ssl=True    # Enabled SSL
             )
 
             email = EmailMessage(
