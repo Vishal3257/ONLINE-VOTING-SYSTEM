@@ -69,7 +69,7 @@ class CastVoteView(APIView):
         except Candidate.DoesNotExist:
             return Response({"error": "Candidate not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        Vote.objects.create(user=user, candidate=candidate)
+        Vote.objects.create(voter=request.user, candidate=candidate)
         user.has_voted = True
         user.save()
 
