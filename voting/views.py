@@ -1,17 +1,21 @@
-from django.views.decorators.csrf import csrf_exempt
-from django.utils.decorators import method_decorator
+import os
 import threading
 import traceback
-import os
-from django.core.mail import get_connection, EmailMessage, send_mail
-from django.db.models import Count
-from django.http import JsonResponse
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework import status
-from rest_framework.permissions import IsAuthenticated, AllowAny
-from .models import Candidate, CustomUser, Vote  
 
+from django.core.mail import EmailMessage, get_connection
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_exempt
+from rest_framework import status
+from rest_framework.decorators import (
+    authentication_classes,
+    api_view,
+    permission_classes,
+)
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
+from .models import Candidate, CustomUser, Vote
 # 1. ─── REGISTER VIEW ───
 class RegisterView(APIView):
     permission_classes = [AllowAny]
@@ -102,12 +106,17 @@ class CastVoteView(APIView):
 
 
 # 4. ─── ELECTION RESULT & BULK EMAIL VIEW ───
-@method_decorator(csrf_exempt, name='dispatch')
-class ElectionResultView(APIView):
-    permission_classes = [AllowAny]
-    authentication_classes = [] # No session check to block headers
 
-    def get(self, request):
+
+@api_view(['GET', 'POST'])
+@permission_classes([AllowAny])
+@authentication_classes([])
+def election_result_view(request):
+    """
+    Function-based view handling both GET and POST.
+    DRF will automatically manage all CORS preflight (OPTIONS) controls.
+    """
+    if request.method == 'GET':
         candidates = Candidate.objects.all()
         if not candidates.exists():
             return Response({"message": "No candidates found."}, status=status.HTTP_404_NOT_FOUND)
@@ -154,8 +163,7 @@ class ElectionResultView(APIView):
             "total_votes_polled": Vote.objects.count()
         }, status=status.HTTP_200_OK)
 
-    def post(self, request):
-        # Clean standard execution without manual OPTIONS/CORS code
+    elif request.method == 'POST':
         candidates = Candidate.objects.all()
         winner = None
         max_votes = -1
@@ -179,15 +187,13 @@ class ElectionResultView(APIView):
             return Response({"message": "No voters found with valid email addresses."}, status=status.HTTP_200_OK)
 
         try:
-            from django.core.mail import get_connection, EmailMessage
-            import os
-
             print(f"--- ATTEMPTING DIRECT SMTP TO: {voters_emails} ---")
             
+            # Port 465 SSL configuration
             connection = get_connection(
                 backend='django.core.mail.backends.smtp.EmailBackend',
                 host='smtp.gmail.com',
-                port=465,  # Secure SSL Port
+                port=465,
                 username=os.environ.get('EMAIL_HOST_USER', 'vt464670@gmail.com'),
                 password=os.environ.get('EMAIL_HOST_PASSWORD'),
                 use_tls=False,
@@ -210,6 +216,5 @@ class ElectionResultView(APIView):
         except Exception as e:
             print("=== CRITICAL SMTP BLOCKED ERROR ===")
             print(f"The Real Error is: {str(e)}")
-            import traceback
             traceback.print_exc()
             return Response({"error": f"Email failed to send: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

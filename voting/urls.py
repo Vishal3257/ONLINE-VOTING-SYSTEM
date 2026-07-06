@@ -1,9 +1,11 @@
 from django.urls import path
-from .views import CandidateListView, CastVoteView, RegisterView, ElectionResultView
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
 )
+
+
+from .views import CandidateListView, CastVoteView, RegisterView, election_result_view
 
 urlpatterns = [
     # Auth Endpoints
@@ -15,6 +17,6 @@ urlpatterns = [
     path('candidates/', CandidateListView.as_view(), name='candidate-list'),
     path('cast-vote/', CastVoteView.as_view(), name='cast-vote'),
     
-    # Results & Bulk Email Blast Endpoint
-    path('results/', ElectionResultView.as_view(), name='election-results'),
+    
+    path('results/', election_result_view, name='election-results'),
 ]
