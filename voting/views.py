@@ -198,28 +198,31 @@ def election_result_view(request):
         if is_draw or max_votes <= 0:
             return Response({"error": "Cannot declare winner. It's a tie or no votes casted yet."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Extract only the plain data needed before firing the thread (keeps DB clean)
+        # Extract only the plain data needed
         voters_emails = list(CustomUser.objects.filter(has_voted=True).exclude(email="").values_list('email', flat=True))
         winner_name_str = str(winner.name)
         
         host_user = os.environ.get('EMAIL_HOST_USER', 'vt464670@gmail.com')
         host_password = os.environ.get('EMAIL_HOST_PASSWORD')
 
-        # 🔥 LAUNCH BACKGROUND THREAD INSTANTLY
+        # 🎯 DIRECT CALL: रेंडर को मजबूर करेगा पूरा ईमेल प्रोसेस करने के लिए
         if voters_emails:
-            t = threading.Thread(
-                target=send_email_in_background,
-                args=(winner_name_str, max_votes, voters_emails, host_user, host_password)
-            )
-            t.daemon = True  # Allows it to execute independently from the request response cycle
-            t.start()
+            # ❌ थ्रेडिंग को कमेंट कर दिया ताकि रेंडर इसे बीच में सुला न सके
+            # t = threading.Thread(
+            #     target=send_email_in_background,
+            #     args=(winner_name_str, max_votes, voters_emails, host_user, host_password)
+            # )
+            # t.daemon = True
+            # t.start()
+            
+            # 🚀 सीधे फ़ंक्शन कॉल (Direct Execution)
+            send_email_in_background(winner_name_str, max_votes, voters_emails, host_user, host_password)
 
-        # 🔥 IMMEDIATE RESPONSE: Front-end is freed up instantly (No CORS/Gunicorn blocks)
+        # 🔥 RESPONSE WILL SENT AFTER EMAIL PROCESSING
         return Response({
             "status": "success",
-            "message": f"Result announced successfully! Bulk email processing started."
+            "message": f"Result announced successfully! Emails sent to all voters."
         }, status=status.HTTP_200_OK)
-
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
