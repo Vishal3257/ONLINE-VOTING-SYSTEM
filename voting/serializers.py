@@ -3,7 +3,7 @@ from .models import Candidate, Vote, CustomUser
 
 # Serializer to display candidate information and real-time vote counts
 class CandidateSerializer(serializers.ModelSerializer):
-    # यह नया फील्ड हर कैंडिडेट को वोट देने वाले वोटर्स के नाम की लिस्ट भेजेगा
+    # Field to retrieve the list of usernames of voters who voted for each candidate
     voters = serializers.SerializerMethodField()
 
     class Meta:
@@ -11,8 +11,9 @@ class CandidateSerializer(serializers.ModelSerializer):
         fields = ['id', 'name', 'party', 'vote_count', 'voters']
 
     def get_voters(self, obj):
-        # इस कैंडिडेट के सभी वोट रिकॉर्ड्स में से सिर्फ वोटर्स के username की लिस्ट निकालें
+        # Extracts a flat list of usernames from Vote records associated with this candidate
         return list(Vote.objects.filter(candidate=obj).values_list('voter__username', flat=True))
+
 
 # Serializer to handle the voting process with validation logic
 class VoteSerializer(serializers.ModelSerializer):
@@ -27,8 +28,9 @@ class VoteSerializer(serializers.ModelSerializer):
         if user.has_voted:
             raise serializers.ValidationError("You have already cast your vote!")
         return attrs
-    
 
+
+# Serializer for user registration handling user creation and password hashing
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
 

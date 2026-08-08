@@ -1,58 +1,117 @@
 'use client';
+
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'link/next'
+import Link from 'next/link';
 import { apiRequest } from '../../utils/api';
 
 export default function Register() {
-    const [username, setUsername] = useState('');
-    const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
-    const [message, setMessage] = useState('');
+    const [formData, setFormData] = useState({ username: '', password: '', confirmPassword: '' });
     const [error, setError] = useState('');
+    const [loading, setLoading] = useState(false);
     const router = useRouter();
 
-    const handleRegister = async (e) => {
+    const handleChange = (e) => {
+        setFormData({ ...formData, [e.target.name]: e.target.value });
+    };
+
+    const handleSubmit = async (e) => {
         e.preventDefault();
-        setMessage(''); setError('');
+        setError('');
+
+        if (formData.password !== formData.confirmPassword) {
+            setError('Passwords do not match');
+            return;
+        }
+
+        setLoading(true);
+
         try {
-            await apiRequest('auth/register/', 'POST', { username, email, password });
-            setMessage('🎉 Registration successful! Redirecting to login...');
-            setTimeout(() => router.push('/login'), 2000);
+            await apiRequest('register/', 'POST', {
+                username: formData.username,
+                password: formData.password,
+            });
+            router.push('/login');
         } catch (err) {
-            setError(err.message || 'Registration failed.');
+            setError(err.message || 'Registration failed. Try a different username.');
+        } finally {
+            setLoading(false);
         }
     };
 
     return (
-        <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-slate-900 px-4">
-            <div className="w-full max-w-md p-8 bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl border border-purple-500/20">
+        <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 font-sans text-slate-800">
+            <div className="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-sm p-8">
                 <div className="text-center mb-8">
-                    <span className="px-3 py-1 text-xs font-semibold uppercase bg-purple-100 text-purple-800 rounded-full">MIMT Portal</span>
-                    <h2 className="text-3xl font-extrabold text-gray-900 mt-3">Create Account</h2>
-                    <p className="text-sm text-gray-500 mt-1">Register yourself to cast your valuable vote</p>
+                    <span className="px-3 py-1 text-[11px] font-bold uppercase tracking-wider bg-blue-50 text-blue-700 rounded-full border border-blue-100 inline-block mb-3">
+                        MIMT Portal
+                    </span>
+                    <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Create Account</h1>
+                    <p className="text-xs text-slate-500 mt-1">Register as a student voter</p>
                 </div>
-                
-                {message && <div className="p-3 mb-4 text-sm bg-green-100 text-green-800 rounded-xl border border-green-200 text-center font-medium animate-pulse">{message}</div>}
-                {error && <div className="p-3 mb-4 text-sm bg-red-100 text-red-800 rounded-xl border border-red-200 text-center font-medium">{error}</div>}
-                
-                <form onSubmit={handleRegister} className="space-y-5">
-                    <div>
-                        <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Username</label>
-                        <input type="text" placeholder="e.g., VISHAL" className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none text-gray-800 transition" value={username} onChange={e => setUsername(e.target.value)} required />
+
+                {error && (
+                    <div className="p-3 mb-6 text-xs bg-rose-50 text-rose-700 rounded-xl border border-rose-200 font-medium text-center">
+                        {error}
                     </div>
+                )}
+
+                <form onSubmit={handleSubmit} className="space-y-4">
                     <div>
-                        <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Email Address</label>
-                        <input type="email" placeholder="student@mimt.com" className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none text-gray-800 transition" value={email} onChange={e => setEmail(e.target.value)} required />
+                        <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">Username</label>
+                        <input
+                            type="text"
+                            name="username"
+                            required
+                            value={formData.username}
+                            onChange={handleChange}
+                            placeholder="Choose a username"
+                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:border-blue-500 focus:outline-none transition-all"
+                        />
                     </div>
+
                     <div>
-                        <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Password</label>
-                        <input type="password" placeholder="••••••••" className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none text-gray-800 transition" value={password} onChange={e => setPassword(e.target.value)} required />
+                        <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">Password</label>
+                        <input
+                            type="password"
+                            name="password"
+                            required
+                            value={formData.password}
+                            onChange={handleChange}
+                            placeholder="••••••••"
+                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:border-blue-500 focus:outline-none transition-all"
+                        />
                     </div>
-                    <button type="submit" className="w-full py-3.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-indigo-500/30 transition transform hover:-translate-y-0.5">
-                        Register as Voter
+
+                    <div>
+                        <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">Confirm Password</label>
+                        <input
+                            type="password"
+                            name="confirmPassword"
+                            required
+                            value={formData.confirmPassword}
+                            onChange={handleChange}
+                            placeholder="••••••••"
+                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:border-blue-500 focus:outline-none transition-all"
+                        />
+                    </div>
+
+                    <button
+                        type="submit"
+                        disabled={loading}
+                        className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-md shadow-blue-500/20 transition-all mt-2"
+                    >
+                        {loading ? 'Creating Account...' : 'Register'}
                     </button>
                 </form>
-                <p className="text-center text-sm text-gray-600 mt-6">Already registered? <a href="/login" className="text-purple-600 font-bold hover:underline">Log In</a></p>
+
+                <p className="text-xs text-center text-slate-500 mt-6">
+                    Already have an account?{' '}
+                    <Link href="/login" className="text-blue-600 font-bold hover:underline">
+                        Sign In
+                    </Link>
+                </p>
             </div>
         </div>
     );
