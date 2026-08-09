@@ -88,7 +88,8 @@ export default function Dashboard() {
         setSuccessMessage('');
 
         try {
-            const data = await apiRequest('vote/', 'POST', { candidate_id: candidateId });
+            // Updated endpoint path to match Django urls.py ('cast-vote/')
+            const data = await apiRequest('cast-vote/', 'POST', { candidate_id: candidateId });
             setSuccessMessage(data.message || '🎉 Your vote has been recorded successfully!');
             setHasVoted(true);
             fetchDashboardData();

@@ -21,7 +21,7 @@ export default function Login() {
         setLoading(true);
 
         try {
-            const data = await apiRequest('login/', 'POST', formData);
+            const data = await apiRequest('auth/login/', 'POST', formData);
             if (data.access) {
                 localStorage.setItem('token', data.access);
                 router.push('/dashboard');

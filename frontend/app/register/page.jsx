@@ -28,10 +28,11 @@ export default function Register() {
         setLoading(true);
 
         try {
-            await apiRequest('register/', 'POST', {
-                username: formData.username,
-                password: formData.password,
-            });
+            await apiRequest('auth/register/', 'POST', {
+    username: formData.username,
+    password: formData.password,
+});
+            
             router.push('/login');
         } catch (err) {
             setError(err.message || 'Registration failed. Try a different username.');

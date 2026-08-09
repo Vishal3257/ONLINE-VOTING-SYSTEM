@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { apiRequest } from '../../utils/api';
 
 export default function ResultDashboard() {
   const [results, setResults] = useState([]);
@@ -10,12 +11,11 @@ export default function ResultDashboard() {
   const [loading, setLoading] = useState(true);
   const [isBlasting, setIsBlasting] = useState(false);
 
-  // Fetch live results from Django backend
+  // Fetch live results from Django backend using apiRequest utility
   const fetchResults = async () => {
     try {
-      const response = await fetch('https://online-voting-system-x4i2.onrender.com/api/results/');
-      const data = await response.json();
-      if (response.ok) {
+      const data = await apiRequest('results/', 'GET');
+      if (data) {
         setResults(data.results || []);
         setWinner(data.winner || '');
         setGapMessage(data.gap_message || '');
@@ -40,17 +40,13 @@ export default function ResultDashboard() {
     
     setIsBlasting(true);
     try {
-      const response = await fetch('https://online-voting-system-x4i2.onrender.com/api/results/', {
-        method: 'POST',
-      });
-      const data = await response.json();
-      if (response.ok) {
+      const data = await apiRequest('results/', 'POST');
+      if (data) {
         alert(data.message || "Email blast started successfully!");
-      } else {
-        alert(data.error || "Failed to trigger email blast.");
       }
     } catch (error) {
       console.error("Error in email blast:", error);
+      alert(error.message || "Failed to trigger email blast.");
     } finally {
       setIsBlasting(false);
     }
