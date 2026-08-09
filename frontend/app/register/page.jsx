@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'link/next'
+
 import Link from 'next/link';
 import { apiRequest } from '../../utils/api';
 
