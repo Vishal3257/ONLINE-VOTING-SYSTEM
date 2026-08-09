@@ -2,7 +2,6 @@
 const BASE_URL = "https://online-voting-system-x4i2.onrender.com/api";
 
 export const apiRequest = async (endpoint, method = "GET", data = null) => {
-    // Check both 'token' and 'accessToken' keys to avoid any naming mismatch
     let token = null;
     if (typeof window !== "undefined") {
         token = localStorage.getItem("token") || localStorage.getItem("accessToken");
@@ -12,11 +11,16 @@ export const apiRequest = async (endpoint, method = "GET", data = null) => {
         "Content-Type": "application/json",
     };
 
-    // --- FIX: Do not attach token for auth login and register endpoints ---
-    if (token && !endpoint.includes("auth/login") && !endpoint.includes("auth/register")) {
+    // Clean leading and trailing slashes from endpoint
+    let cleanEndpoint = endpoint.startsWith("/") ? endpoint.slice(1) : endpoint;
+    if (!cleanEndpoint.endsWith("/")) {
+        cleanEndpoint = `${cleanEndpoint}/`;
+    }
+
+    // Do not attach token for auth endpoints
+    if (token && !cleanEndpoint.includes("auth/login") && !cleanEndpoint.includes("auth/register")) {
         headers["Authorization"] = `Bearer ${token}`;
     }
-    // ───────────────────────────────────────────────────────────────────
 
     const config = {
         method,
@@ -27,9 +31,12 @@ export const apiRequest = async (endpoint, method = "GET", data = null) => {
         config.body = JSON.stringify(data);
     }
 
-    const response = await fetch(`${BASE_URL}/${endpoint}`, config);
+    // Final cleanly built URL
+    const fullUrl = `${BASE_URL}/${cleanEndpoint}`;
+
+    const response = await fetch(fullUrl, config);
     
-    // Handle potential non-JSON responses (like HTML error pages from Render/Django)
+    // Handle potential non-JSON responses
     const contentType = response.headers.get("content-type");
     let result = null;
     
@@ -46,10 +53,9 @@ export const apiRequest = async (endpoint, method = "GET", data = null) => {
                     .map(([key, val]) => `${key}: ${Array.isArray(val) ? val.join(', ') : val}`)
                     .join(' | ');
             } else {
-                errorMessage = result.message || result.non_field_errors?.[0] || String(result);
+                errorMessage = result.message || result.detail || result.non_field_errors?.[0] || String(result);
             }
         } else {
-            // If response is HTML instead of JSON, display status text
             errorMessage = `Server Error: ${response.status} ${response.statusText}`;
         }
         throw new Error(errorMessage);
