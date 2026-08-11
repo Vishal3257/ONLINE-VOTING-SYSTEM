@@ -37,11 +37,12 @@ export default function Register() {
         setLoading(true);
 
         try {
-            await apiRequest('auth/send-otp/', 'POST', { email: formData.email });
+            // URL path formatted properly for backend routes
+            await apiRequest('/auth/send-otp/', 'POST', { email: formData.email });
             setMessage('OTP sent to your email successfully!');
             setStep(2); // Move to OTP & Register form
         } catch (err) {
-            setError(err.message || 'Failed to send OTP. Check your email.');
+            setError(err.message || 'Failed to send OTP. Check your email or backend connection.');
         } finally {
             setLoading(false);
         }
@@ -61,7 +62,8 @@ export default function Register() {
         setLoading(true);
 
         try {
-            await apiRequest('auth/register/', 'POST', {
+            // URL path formatted properly for backend routes
+            await apiRequest('/auth/register/', 'POST', {
                 email: formData.email,
                 otp: formData.otp,
                 username: formData.username,
@@ -106,7 +108,9 @@ export default function Register() {
                 {step === 1 && (
                     <form onSubmit={handleSendOTP} className="space-y-4">
                         <div>
-                            <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">Email Address (Gmail)</label>
+                            <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">
+                                Email Address (Gmail)
+                            </label>
                             <input
                                 type="email"
                                 name="email"
@@ -132,7 +136,9 @@ export default function Register() {
                 {step === 2 && (
                     <form onSubmit={handleRegister} className="space-y-4">
                         <div>
-                            <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">Email Address</label>
+                            <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">
+                                Email Address
+                            </label>
                             <input
                                 type="email"
                                 name="email"
@@ -143,7 +149,9 @@ export default function Register() {
                         </div>
 
                         <div>
-                            <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">6-Digit OTP</label>
+                            <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">
+                                6-Digit OTP
+                            </label>
                             <input
                                 type="text"
                                 name="otp"
@@ -152,12 +160,14 @@ export default function Register() {
                                 value={formData.otp}
                                 onChange={handleChange}
                                 placeholder="Enter OTP"
-                                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:border-blue-500 focus:outline-none transition-all"
+                                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:border-blue-500 focus:outline-none transition-all text-center tracking-widest font-bold"
                             />
                         </div>
 
                         <div>
-                            <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">Username</label>
+                            <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">
+                                Username
+                            </label>
                             <input
                                 type="text"
                                 name="username"
@@ -170,7 +180,9 @@ export default function Register() {
                         </div>
 
                         <div>
-                            <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">Password</label>
+                            <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">
+                                Password
+                            </label>
                             <input
                                 type="password"
                                 name="password"
@@ -183,7 +195,9 @@ export default function Register() {
                         </div>
 
                         <div>
-                            <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">Confirm Password</label>
+                            <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">
+                                Confirm Password
+                            </label>
                             <input
                                 type="password"
                                 name="confirmPassword"
