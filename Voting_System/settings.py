@@ -37,7 +37,7 @@ INSTALLED_APPS = [
     # Third-party applications
     'rest_framework',
     'corsheaders',
-    
+    'drf_spectacular',
     # Local application
     'voting',
 ]
@@ -121,6 +121,19 @@ REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     )
+}
+REST_FRAMEWORK = {
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ),
+}
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Online Voting System API',
+    'DESCRIPTION': 'API documentation for Online Voting System with JWT & OTP Auth',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
 }
 
 # Custom User Model definition
