@@ -1,10 +1,12 @@
 import os
+import random
 import threading
 import traceback
 from datetime import time
 
 from django.conf import settings
-from django.core.mail import EmailMessage, get_connection
+from django.contrib.auth import authenticate
+from django.core.mail import EmailMessage, get_connection, send_mail
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.decorators import (
@@ -15,15 +17,14 @@ from rest_framework.decorators import (
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework_simplejwt.tokens import RefreshToken
 
-from .models import Candidate, CustomUser, ElectionConfig, Vote
+# Models Import
+from .models import Candidate, CustomUser, ElectionConfig, EmailOTP, Vote
 
 
 # ─── ISOLATED BACKGROUND BULK EMAIL FUNCTION ───
 def send_email_in_background(winner_name, max_votes, email_list, host_user, host_password):
-    """
-    Handles SMTP bulk email dispatch to all voters who cast their votes.
-    """
     try:
         connection = get_connection(
             backend='django.core.mail.backends.smtp.EmailBackend',
@@ -51,9 +52,7 @@ def send_email_in_background(winner_name, max_votes, email_list, host_user, host
         email.send(fail_silently=False)
         print("=== BACKGROUND BULK EMAIL DISPATCHED SUCCESSFULLY ===")
     except Exception as e:
-        print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
         print(f"🔥 SMTP EMAIL ERROR DETECTED: {str(e)}")
-        print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 
 
 # 1. ─── REGISTER VIEW ───
@@ -90,7 +89,91 @@ class RegisterView(APIView):
         )
 
 
-# 2. ─── CANDIDATE LIST VIEW ───
+# 2. ─── SEND LOGIN OTP VIEW ───
+class SendLoginOTPView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        email = request.data.get('email')
+        if not email:
+            return Response({"error": "Email is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            user = CustomUser.objects.get(email=email)
+        except CustomUser.DoesNotExist:
+            return Response({"error": "No registered user found with this email."}, status=status.HTTP_404_NOT_FOUND)
+
+        # Generate 6-digit OTP
+        otp_code = str(random.randint(100000, 999999))
+
+        # Save to EmailOTP table
+        EmailOTP.objects.create(email=email, otp=otp_code)
+
+        # Send Email via Gmail SMTP
+        try:
+            send_mail(
+                subject="MIMT Voting Portal - Login OTP",
+                message=f"Hi {user.username},\n\nYour OTP for login is: {otp_code}\n\nValid for 10 minutes.",
+                from_email=settings.DEFAULT_FROM_EMAIL if hasattr(settings, 'DEFAULT_FROM_EMAIL') else None,
+                recipient_list=[email],
+                fail_silently=False,
+            )
+            return Response({"message": "OTP sent successfully to your email."}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": f"Failed to send email: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# 3. ─── LOGIN WITH OTP VIEW ───
+class LoginWithOTPView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        email = request.data.get('email')
+        password = request.data.get('password')
+        otp_code = request.data.get('otp')
+
+        if not email or not password or not otp_code:
+            return Response({"error": "Email, password, and OTP are required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # OTP Verification Check
+        otp_record = EmailOTP.objects.filter(
+            email=email,
+            otp=otp_code,
+            is_verified=False
+        ).order_by('-created_at').first()
+
+        if not otp_record:
+            return Response({"error": "Invalid OTP."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if otp_record.is_expired():
+            return Response({"error": "OTP has expired. Please request a new one."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Password Verification
+        try:
+            user_obj = CustomUser.objects.get(email=email)
+        except CustomUser.DoesNotExist:
+            return Response({"error": "User not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        user = authenticate(username=user_obj.username, password=password)
+        if not user:
+            return Response({"error": "Invalid credentials (Password mismatch)."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        # Mark OTP as used
+        otp_record.is_verified = True
+        otp_record.save()
+
+        # JWT Tokens Generation
+        refresh = RefreshToken.for_user(user)
+        return Response({
+            "refresh": str(refresh),
+            "access": str(refresh.access_token),
+            "username": user.username,
+            "has_voted": user.has_voted,
+            "message": "Login successful!"
+        }, status=status.HTTP_200_OK)
+
+
+# 4. ─── CANDIDATE LIST VIEW ───
 class CandidateListView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
@@ -101,7 +184,7 @@ class CandidateListView(APIView):
         return Response(data, status=status.HTTP_200_OK)
 
 
-# 3. ─── VOTE CAST VIEW ───
+# 5. ─── VOTE CAST VIEW ───
 class CastVoteView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -109,7 +192,6 @@ class CastVoteView(APIView):
         user = request.user
         candidate_id = request.data.get('candidate_id')
 
-        # Prevent voting if election is already declared or closed
         config = ElectionConfig.objects.first()
         if config and config.is_declared:
             return Response(
@@ -139,14 +221,13 @@ class CastVoteView(APIView):
 
         Vote.objects.create(voter=request.user, candidate=candidate)
         
-        # Increment vote count on candidate model and update user status
         candidate.vote_count += 1
         candidate.save()
 
         user.has_voted = True
         user.save()
 
-        # Send individual vote confirmation email
+        # Vote Confirmation Email
         try:
             connection = get_connection(
                 backend='django.core.mail.backends.smtp.EmailBackend',
@@ -174,7 +255,7 @@ class CastVoteView(APIView):
         )
 
 
-# 4. ─── ELECTION RESULT & BULK EMAIL VIEW (AUTOMATIC & MANUAL TRIGGER) ───
+# 6. ─── ELECTION RESULT VIEW ───
 @api_view(['GET', 'POST'])
 @permission_classes([AllowAny])
 @authentication_classes([])
@@ -182,10 +263,8 @@ def election_result_view(request):
     config = ElectionConfig.objects.first()
     now = timezone.now()
 
-    # --- 1. AUTOMATIC TIME CHECK (Runs on GET request after configured end_time) ---
     if config and not config.is_declared:
         if now >= config.end_time:
-            # Automatic winner declaration logic
             candidates = Candidate.objects.all()
             if candidates.exists():
                 winner = max(candidates, key=lambda c: c.vote_count, default=None)
@@ -206,7 +285,6 @@ def election_result_view(request):
                     config.is_declared = True
                     config.save()
 
-    # --- 2. GET METHOD (Fetch Live Results) ---
     if request.method == 'GET':
         candidates = Candidate.objects.all()
         if not candidates.exists():
@@ -255,7 +333,6 @@ def election_result_view(request):
             "total_votes_polled": Vote.objects.count()
         }, status=status.HTTP_200_OK)
 
-    # --- 3. POST METHOD (Manual Instant Winner Declaration) ---
     elif request.method == 'POST':
         candidates = Candidate.objects.all()
         winner = None
@@ -292,7 +369,6 @@ def election_result_view(request):
                 winner_name_str, max_votes, voters_emails, host_user, host_password
             )
 
-        # Mark election as declared upon manual trigger
         if config:
             config.is_declared = True
             config.save()
@@ -303,7 +379,7 @@ def election_result_view(request):
         }, status=status.HTTP_200_OK)
 
 
-# 5. ─── CREATE ADMIN BACKUP VIEW ───
+# 7. ─── CREATE ADMIN BACKUP VIEW ───
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def create_admin_backup(request):
