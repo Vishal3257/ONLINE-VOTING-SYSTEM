@@ -24,7 +24,7 @@ from .models import Candidate, CustomUser, ElectionConfig, EmailOTP, Vote
 
 
 # ─── ISOLATED BACKGROUND SINGLE OTP EMAIL FUNCTION ───
-def send_otp_email_in_background(email, username, otp_code):
+def send_otp_email_in_background(email, username, otp_code, is_login=False):
     try:
         host_user = os.environ.get('EMAIL_HOST_USER', getattr(settings, 'EMAIL_HOST_USER', 'vt464670@gmail.com'))
         host_password = os.environ.get('EMAIL_HOST_PASSWORD', getattr(settings, 'EMAIL_HOST_PASSWORD', ''))
@@ -39,9 +39,12 @@ def send_otp_email_in_background(email, username, otp_code):
             timeout=8
         )
 
+        subject = "MIMT Voting Portal - Login OTP" if is_login else "MIMT Voting Portal - Registration OTP"
+        greeting_name = username if username else "User"
+
         msg = EmailMessage(
-            subject="MIMT Voting Portal - Login OTP",
-            body=f"Hi {username},\n\nYour OTP for login is: {otp_code}\n\nValid for 10 minutes.",
+            subject=subject,
+            body=f"Hi {greeting_name},\n\nYour OTP is: {otp_code}\n\nValid for 10 minutes.",
             from_email=host_user,
             to=[email],
             connection=connection
@@ -108,6 +111,30 @@ def send_vote_confirmation_in_background(email, username, candidate_name, host_u
         print(f"🔥 VOTE CONFIRMATION SMTP ERROR: {str(e)}")
 
 
+# 0. ─── SEND REGISTER OTP VIEW ───
+class SendOTPView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        email = request.data.get('email')
+        if not email:
+            return Response({"error": "Email is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Generate 6-digit OTP
+        otp_code = str(random.randint(100000, 999999))
+
+        # Save to EmailOTP table
+        EmailOTP.objects.create(email=email, otp=otp_code)
+
+        # Trigger Background Email
+        threading.Thread(
+            target=send_otp_email_in_background,
+            args=(email, "", otp_code, False)
+        ).start()
+
+        return Response({"message": "OTP sent successfully to your email."}, status=status.HTTP_200_OK)
+
+
 # 1. ─── REGISTER VIEW ───
 class RegisterView(APIView):
     permission_classes = [AllowAny]
@@ -142,7 +169,7 @@ class RegisterView(APIView):
         )
 
 
-# 2. ─── SEND LOGIN OTP VIEW (NOW NON-BLOCKING & FAST) ───
+# 2. ─── SEND LOGIN OTP VIEW ───
 class SendLoginOTPView(APIView):
     permission_classes = [AllowAny]
 
@@ -165,7 +192,7 @@ class SendLoginOTPView(APIView):
         # Trigger Threaded Email (Instant Response)
         threading.Thread(
             target=send_otp_email_in_background,
-            args=(email, user.username, otp_code)
+            args=(email, user.username, otp_code, True)
         ).start()
 
         return Response({"message": "OTP sent successfully to your email."}, status=status.HTTP_200_OK)
