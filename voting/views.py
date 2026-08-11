@@ -124,12 +124,15 @@ def send_vote_confirmation_in_background(email, username, candidate_name, host_u
 # 0. ─── SEND REGISTER OTP VIEW ───
 class SendOTPView(APIView):
     permission_classes = [AllowAny]
+    serializer_class = SendOTPSerializer
 
     @extend_schema(request=SendOTPSerializer)
     def post(self, request):
-        email = request.data.get('email')
-        if not email:
-            return Response({"error": "Email is required."}, status=status.HTTP_400_BAD_REQUEST)
+        serializer = SendOTPSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        email = serializer.validated_data.get('email')
 
         # Generate 6-digit OTP
         otp_code = str(random.randint(100000, 999999))
@@ -149,18 +152,17 @@ class SendOTPView(APIView):
 # 1. ─── REGISTER VIEW ───
 class RegisterView(APIView):
     permission_classes = [AllowAny]
+    serializer_class = RegisterSerializer
 
     @extend_schema(request=RegisterSerializer)
     def post(self, request):
-        username = request.data.get('username')
-        email = request.data.get('email')
-        password = request.data.get('password')
+        serializer = RegisterSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        if not username or not email or not password:
-            return Response(
-                {"error": "All fields (username, email, password) are required."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        username = serializer.validated_data.get('username')
+        email = serializer.validated_data.get('email')
+        password = serializer.validated_data.get('password')
 
         if CustomUser.objects.filter(username=username).exists():
             return Response(
@@ -184,16 +186,19 @@ class RegisterView(APIView):
 # 2. ─── SEND LOGIN OTP VIEW ───
 class SendLoginOTPView(APIView):
     permission_classes = [AllowAny]
+    serializer_class = SendOTPSerializer
 
     @extend_schema(request=SendOTPSerializer)
     def post(self, request):
-        email = request.data.get('email')
-        if not email:
-            return Response({"error": "Email is required."}, status=status.HTTP_400_BAD_REQUEST)
+        serializer = SendOTPSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        try:
-            user = CustomUser.objects.get(email=email)
-        except CustomUser.DoesNotExist:
+        email = serializer.validated_data.get('email')
+
+        # Safe query using filter().first() to avoid MultipleObjectsReturned crash
+        user = CustomUser.objects.filter(email=email).first()
+        if not user:
             return Response({"error": "No registered user found with this email."}, status=status.HTTP_404_NOT_FOUND)
 
         # Generate 6-digit OTP
@@ -214,15 +219,17 @@ class SendLoginOTPView(APIView):
 # 3. ─── LOGIN WITH OTP VIEW ───
 class LoginWithOTPView(APIView):
     permission_classes = [AllowAny]
+    serializer_class = LoginOTPSerializer
 
     @extend_schema(request=LoginOTPSerializer)
     def post(self, request):
-        email = request.data.get('email')
-        password = request.data.get('password')
-        otp_code = request.data.get('otp')
+        serializer = LoginOTPSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        if not email or not password or not otp_code:
-            return Response({"error": "Email, password, and OTP are required."}, status=status.HTTP_400_BAD_REQUEST)
+        email = serializer.validated_data.get('email')
+        password = serializer.validated_data.get('password')
+        otp_code = serializer.validated_data.get('otp')
 
         # OTP Verification Check
         otp_record = EmailOTP.objects.filter(
@@ -237,10 +244,9 @@ class LoginWithOTPView(APIView):
         if otp_record.is_expired():
             return Response({"error": "OTP has expired. Please request a new one."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Password Verification
-        try:
-            user_obj = CustomUser.objects.get(email=email)
-        except CustomUser.DoesNotExist:
+        # Safe user retrieval
+        user_obj = CustomUser.objects.filter(email=email).first()
+        if not user_obj:
             return Response({"error": "User not found."}, status=status.HTTP_404_NOT_FOUND)
 
         user = authenticate(username=user_obj.username, password=password)
@@ -266,6 +272,7 @@ class LoginWithOTPView(APIView):
 class CandidateListView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
+    serializer_class = CandidateSerializer
 
     @extend_schema(responses={200: CandidateSerializer(many=True)})
     def get(self, request):
@@ -277,6 +284,7 @@ class CandidateListView(APIView):
 # 5. ─── VOTE CAST VIEW ───
 class CastVoteView(APIView):
     permission_classes = [IsAuthenticated]
+    serializer_class = VoteSerializer
 
     @extend_schema(request=VoteSerializer)
     def post(self, request):
@@ -334,6 +342,7 @@ class CastVoteView(APIView):
 
 
 # 6. ─── ELECTION RESULT VIEW ───
+@extend_schema(methods=['GET', 'POST'], responses={200: None})
 @api_view(['GET', 'POST'])
 @permission_classes([AllowAny])
 @authentication_classes([])
@@ -460,6 +469,7 @@ def election_result_view(request):
 
 
 # 7. ─── CREATE ADMIN BACKUP VIEW ───
+@extend_schema(responses={200: None})
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def create_admin_backup(request):
