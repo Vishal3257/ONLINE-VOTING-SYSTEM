@@ -23,6 +23,35 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from .models import Candidate, CustomUser, ElectionConfig, EmailOTP, Vote
 
 
+# ─── ISOLATED BACKGROUND SINGLE OTP EMAIL FUNCTION ───
+def send_otp_email_in_background(email, username, otp_code):
+    try:
+        host_user = os.environ.get('EMAIL_HOST_USER', getattr(settings, 'EMAIL_HOST_USER', 'vt464670@gmail.com'))
+        host_password = os.environ.get('EMAIL_HOST_PASSWORD', getattr(settings, 'EMAIL_HOST_PASSWORD', ''))
+
+        connection = get_connection(
+            backend='django.core.mail.backends.smtp.EmailBackend',
+            host='smtp.gmail.com',
+            port=587,
+            username=host_user,
+            password=host_password,
+            use_tls=True,
+            timeout=8
+        )
+
+        msg = EmailMessage(
+            subject="MIMT Voting Portal - Login OTP",
+            body=f"Hi {username},\n\nYour OTP for login is: {otp_code}\n\nValid for 10 minutes.",
+            from_email=host_user,
+            to=[email],
+            connection=connection
+        )
+        msg.send(fail_silently=True)
+        print(f"=== OTP EMAIL DISPATCHED TO {email} ===")
+    except Exception as e:
+        print(f"🔥 OTP SMTP ERROR: {str(e)}")
+
+
 # ─── ISOLATED BACKGROUND BULK EMAIL FUNCTION ───
 def send_email_in_background(winner_name, max_votes, email_list, host_user, host_password):
     try:
@@ -49,10 +78,34 @@ def send_email_in_background(winner_name, max_votes, email_list, host_user, host
             to=email_list,
             connection=connection
         )
-        email.send(fail_silently=False)
+        email.send(fail_silently=True)
         print("=== BACKGROUND BULK EMAIL DISPATCHED SUCCESSFULLY ===")
     except Exception as e:
         print(f"🔥 SMTP EMAIL ERROR DETECTED: {str(e)}")
+
+
+# ─── ISOLATED BACKGROUND VOTE CONFIRMATION EMAIL ───
+def send_vote_confirmation_in_background(email, username, candidate_name, host_user, host_password):
+    try:
+        connection = get_connection(
+            backend='django.core.mail.backends.smtp.EmailBackend',
+            host='smtp.gmail.com',
+            port=587,
+            username=host_user,
+            password=host_password,
+            use_tls=True,
+            timeout=5
+        )
+        msg = EmailMessage(
+            subject="Vote Casted Successfully! 🗳️",
+            body=f"Hi {username},\n\nYour vote has been successfully registered for {candidate_name}.\n\nThank you!",
+            from_email=host_user,
+            to=[email],
+            connection=connection
+        )
+        msg.send(fail_silently=True)
+    except Exception as e:
+        print(f"🔥 VOTE CONFIRMATION SMTP ERROR: {str(e)}")
 
 
 # 1. ─── REGISTER VIEW ───
@@ -89,7 +142,7 @@ class RegisterView(APIView):
         )
 
 
-# 2. ─── SEND LOGIN OTP VIEW ───
+# 2. ─── SEND LOGIN OTP VIEW (NOW NON-BLOCKING & FAST) ───
 class SendLoginOTPView(APIView):
     permission_classes = [AllowAny]
 
@@ -109,18 +162,13 @@ class SendLoginOTPView(APIView):
         # Save to EmailOTP table
         EmailOTP.objects.create(email=email, otp=otp_code)
 
-        # Send Email via Gmail SMTP
-        try:
-            send_mail(
-                subject="MIMT Voting Portal - Login OTP",
-                message=f"Hi {user.username},\n\nYour OTP for login is: {otp_code}\n\nValid for 10 minutes.",
-                from_email=settings.DEFAULT_FROM_EMAIL if hasattr(settings, 'DEFAULT_FROM_EMAIL') else None,
-                recipient_list=[email],
-                fail_silently=False,
-            )
-            return Response({"message": "OTP sent successfully to your email."}, status=status.HTTP_200_OK)
-        except Exception as e:
-            return Response({"error": f"Failed to send email: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        # Trigger Threaded Email (Instant Response)
+        threading.Thread(
+            target=send_otp_email_in_background,
+            args=(email, user.username, otp_code)
+        ).start()
+
+        return Response({"message": "OTP sent successfully to your email."}, status=status.HTTP_200_OK)
 
 
 # 3. ─── LOGIN WITH OTP VIEW ───
@@ -227,27 +275,14 @@ class CastVoteView(APIView):
         user.has_voted = True
         user.save()
 
-        # Vote Confirmation Email
-        try:
-            connection = get_connection(
-                backend='django.core.mail.backends.smtp.EmailBackend',
-                host='smtp.gmail.com',
-                port=587,
-                username=os.environ.get('EMAIL_HOST_USER', 'vt464670@gmail.com'),
-                password=os.environ.get('EMAIL_HOST_PASSWORD'),
-                use_tls=True,
-                timeout=5
-            )
-            email = EmailMessage(
-                subject="Vote Casted Successfully! 🗳️",
-                body=f"Hi {user.username},\n\nYour vote has been successfully registered for {candidate.name}.\n\nThank you!",
-                from_email=os.environ.get('EMAIL_HOST_USER', 'vt464670@gmail.com'),
-                to=[user.email],
-                connection=connection
-            )
-            email.send(fail_silently=True)
-        except Exception:
-            pass
+        # Vote Confirmation Email Thread
+        host_user = os.environ.get('EMAIL_HOST_USER', getattr(settings, 'EMAIL_HOST_USER', 'vt464670@gmail.com'))
+        host_password = os.environ.get('EMAIL_HOST_PASSWORD', getattr(settings, 'EMAIL_HOST_PASSWORD', ''))
+
+        threading.Thread(
+            target=send_vote_confirmation_in_background,
+            args=(user.email, user.username, candidate.name, host_user, host_password)
+        ).start()
 
         return Response(
             {"message": "Vote casted successfully! Redirecting..."},
@@ -274,13 +309,14 @@ def election_result_view(request):
                         .exclude(email="")
                         .values_list('email', flat=True)
                     )
-                    host_user = os.environ.get('EMAIL_HOST_USER', 'vt464670@gmail.com')
-                    host_password = os.environ.get('EMAIL_HOST_PASSWORD')
+                    host_user = os.environ.get('EMAIL_HOST_USER', getattr(settings, 'EMAIL_HOST_USER', 'vt464670@gmail.com'))
+                    host_password = os.environ.get('EMAIL_HOST_PASSWORD', getattr(settings, 'EMAIL_HOST_PASSWORD', ''))
 
                     if voters_emails:
-                        send_email_in_background(
-                            winner.name, winner.vote_count, voters_emails, host_user, host_password
-                        )
+                        threading.Thread(
+                            target=send_email_in_background,
+                            args=(winner.name, winner.vote_count, voters_emails, host_user, host_password)
+                        ).start()
 
                     config.is_declared = True
                     config.save()
@@ -361,13 +397,14 @@ def election_result_view(request):
         )
         winner_name_str = str(winner.name)
 
-        host_user = os.environ.get('EMAIL_HOST_USER', 'vt464670@gmail.com')
-        host_password = os.environ.get('EMAIL_HOST_PASSWORD')
+        host_user = os.environ.get('EMAIL_HOST_USER', getattr(settings, 'EMAIL_HOST_USER', 'vt464670@gmail.com'))
+        host_password = os.environ.get('EMAIL_HOST_PASSWORD', getattr(settings, 'EMAIL_HOST_PASSWORD', ''))
 
         if voters_emails:
-            send_email_in_background(
-                winner_name_str, max_votes, voters_emails, host_user, host_password
-            )
+            threading.Thread(
+                target=send_email_in_background,
+                args=(winner_name_str, max_votes, voters_emails, host_user, host_password)
+            ).start()
 
         if config:
             config.is_declared = True
