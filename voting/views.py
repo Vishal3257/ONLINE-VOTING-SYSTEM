@@ -8,6 +8,7 @@ from django.conf import settings
 from django.contrib.auth import authenticate
 from django.core.mail import EmailMessage, get_connection, send_mail
 from django.utils import timezone
+from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.decorators import (
     api_view,
@@ -21,6 +22,15 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 # Models Import
 from .models import Candidate, CustomUser, ElectionConfig, EmailOTP, Vote
+
+# Serializers Import
+from .serializers import (
+    CandidateSerializer,
+    LoginOTPSerializer,
+    RegisterSerializer,
+    SendOTPSerializer,
+    VoteSerializer,
+)
 
 
 # ─── ISOLATED BACKGROUND SINGLE OTP EMAIL FUNCTION ───
@@ -115,6 +125,7 @@ def send_vote_confirmation_in_background(email, username, candidate_name, host_u
 class SendOTPView(APIView):
     permission_classes = [AllowAny]
 
+    @extend_schema(request=SendOTPSerializer)
     def post(self, request):
         email = request.data.get('email')
         if not email:
@@ -139,6 +150,7 @@ class SendOTPView(APIView):
 class RegisterView(APIView):
     permission_classes = [AllowAny]
 
+    @extend_schema(request=RegisterSerializer)
     def post(self, request):
         username = request.data.get('username')
         email = request.data.get('email')
@@ -173,6 +185,7 @@ class RegisterView(APIView):
 class SendLoginOTPView(APIView):
     permission_classes = [AllowAny]
 
+    @extend_schema(request=SendOTPSerializer)
     def post(self, request):
         email = request.data.get('email')
         if not email:
@@ -202,6 +215,7 @@ class SendLoginOTPView(APIView):
 class LoginWithOTPView(APIView):
     permission_classes = [AllowAny]
 
+    @extend_schema(request=LoginOTPSerializer)
     def post(self, request):
         email = request.data.get('email')
         password = request.data.get('password')
@@ -253,6 +267,7 @@ class CandidateListView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
 
+    @extend_schema(responses={200: CandidateSerializer(many=True)})
     def get(self, request):
         candidates = Candidate.objects.all()
         data = [{"id": c.id, "name": c.name, "party": getattr(c, 'party', '')} for c in candidates]
@@ -263,6 +278,7 @@ class CandidateListView(APIView):
 class CastVoteView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(request=VoteSerializer)
     def post(self, request):
         user = request.user
         candidate_id = request.data.get('candidate_id')

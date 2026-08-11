@@ -1,6 +1,23 @@
 from rest_framework import serializers
 from .models import Candidate, Vote, CustomUser
 
+
+# ─── SWAGGER INPUT SERIALIZERS (For API Docs Input Boxes) ───
+
+# Serializer to send registration OTP
+class SendOTPSerializer(serializers.Serializer):
+    email = serializers.EmailField(required=True)
+
+
+# Serializer for OTP-based Login verification
+class LoginOTPSerializer(serializers.Serializer):
+    email = serializers.EmailField(required=True)
+    password = serializers.CharField(required=True)
+    otp = serializers.CharField(required=True)
+
+
+# ─── VOTING & USER SERIALIZERS ───
+
 # Serializer to display candidate information and real-time vote counts
 class CandidateSerializer(serializers.ModelSerializer):
     # Field to retrieve the list of usernames of voters who voted for each candidate
@@ -16,17 +33,16 @@ class CandidateSerializer(serializers.ModelSerializer):
 
 
 # Serializer to handle the voting process with validation logic
-class VoteSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Vote
-        fields = ['candidate']
+class VoteSerializer(serializers.Serializer):
+    candidate_id = serializers.IntegerField(required=True)
 
     def validate(self, attrs):
-        user = self.context['request'].user
-        
-        # Validation Logic: Check if the user has already cast a vote
-        if user.has_voted:
-            raise serializers.ValidationError("You have already cast your vote!")
+        request = self.context.get('request')
+        if request and hasattr(request, 'user'):
+            user = request.user
+            # Validation Logic: Check if the user has already cast a vote
+            if getattr(user, 'has_voted', False):
+                raise serializers.ValidationError("You have already cast your vote!")
         return attrs
 
 
