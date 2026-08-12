@@ -9,6 +9,8 @@ export default function ResultDashboard() {
   const [gapMessage, setGapMessage] = useState('');
   const [totalVotes, setTotalVotes] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [declaring, setDeclaring] = useState(false);
+  const [statusMsg, setStatusMsg] = useState('');
 
   // Fetch live results from Django backend
   const fetchResults = async () => {
@@ -24,6 +26,23 @@ export default function ResultDashboard() {
       console.error("Error fetching results:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Declare Results Handler (Calls POST /api/results/)
+  const handleDeclareResults = async () => {
+    if (!confirm("Are you sure you want to officially declare the election results?")) return;
+    
+    setDeclaring(true);
+    setStatusMsg('');
+    try {
+      const response = await apiRequest('results/', 'POST');
+      setStatusMsg(response.message || '🎉 Results declared successfully!');
+      fetchResults(); // Refresh standings after declaration
+    } catch (error) {
+      alert(error.message || 'Failed to declare results. (Admin privileges required)');
+    } finally {
+      setDeclaring(false);
     }
   };
 
@@ -57,16 +76,34 @@ export default function ResultDashboard() {
       {/* Main Glassmorphism Container */}
       <div className="w-full max-w-2xl p-8 md:p-10 bg-slate-900/80 backdrop-blur-md rounded-3xl shadow-2xl border border-slate-800/80 relative z-10">
         
-        {/* Header Badge & Title */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center gap-2 px-3 py-1 text-[11px] font-bold uppercase tracking-widest bg-emerald-500/10 text-emerald-400 rounded-full border border-emerald-500/20 mb-3">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            Live Analytics & Tally
+        {/* Header Badge, Title & Declare Button */}
+        <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-8">
+          <div>
+            <div className="inline-flex items-center gap-2 px-3 py-1 text-[11px] font-bold uppercase tracking-widest bg-emerald-500/10 text-emerald-400 rounded-full border border-emerald-500/20 mb-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              Live Analytics & Tally
+            </div>
+            <h2 className="text-3xl md:text-4xl font-black text-white tracking-tight">
+              Election <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-300">Dashboard</span>
+            </h2>
           </div>
-          <h2 className="text-3xl md:text-4xl font-black text-white tracking-tight">
-            Election <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-300">Dashboard</span>
-          </h2>
+
+          {/* DECLARE RESULTS BUTTON */}
+          <button
+            onClick={handleDeclareResults}
+            disabled={declaring}
+            className="px-5 py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-slate-950 font-black text-xs uppercase tracking-wider transition-all duration-200 shadow-lg shadow-emerald-500/20 whitespace-nowrap"
+          >
+            {declaring ? 'Declaring...' : 'Declare Results 📢'}
+          </button>
         </div>
+
+        {/* Success Alert Status */}
+        {statusMsg && (
+          <div className="mb-6 p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-semibold">
+            {statusMsg}
+          </div>
+        )}
 
         {/* Total Votes Card */}
         <div className="bg-slate-800/50 border border-slate-700/80 p-5 rounded-2xl text-center mb-8 shadow-inner">
