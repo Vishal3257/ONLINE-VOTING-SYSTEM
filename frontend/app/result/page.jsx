@@ -9,9 +9,8 @@ export default function ResultDashboard() {
   const [gapMessage, setGapMessage] = useState('');
   const [totalVotes, setTotalVotes] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [isBlasting, setIsBlasting] = useState(false);
 
-  // Fetch live results from Django backend using apiRequest utility
+  // Fetch live results from Django backend
   const fetchResults = async () => {
     try {
       const data = await apiRequest('results/', 'GET');
@@ -30,27 +29,10 @@ export default function ResultDashboard() {
 
   useEffect(() => {
     fetchResults();
+    // Live Auto Refresh every 4 seconds
     const interval = setInterval(fetchResults, 4000);
     return () => clearInterval(interval);
   }, []);
-
-  // Trigger Bulk Email Blast to all voters from admin side
-  const handleAnnounceAndEmail = async () => {
-    if (!window.confirm("Are you sure you want to announce results and send email to all voters?")) return;
-    
-    setIsBlasting(true);
-    try {
-      const data = await apiRequest('results/', 'POST');
-      if (data) {
-        alert(data.message || "Email blast started successfully!");
-      }
-    } catch (error) {
-      console.error("Error in email blast:", error);
-      alert(error.message || "Failed to trigger email blast.");
-    } finally {
-      setIsBlasting(false);
-    }
-  };
 
   if (loading) {
     return (
@@ -67,7 +49,7 @@ export default function ResultDashboard() {
   }
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-900 via-indigo-950 to-slate-950 px-4 py-12 relative overflow-hidden">
+    <div className="flex flex-col items-center justify-center min-h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-900 via-indigo-950 to-slate-950 px-4 py-12 relative overflow-hidden font-sans">
       {/* Ambient Background Decorative Blurs */}
       <div className="absolute top-1/4 -left-20 w-80 h-80 bg-blue-600/20 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute bottom-1/4 -right-20 w-80 h-80 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
@@ -128,35 +110,16 @@ export default function ResultDashboard() {
         </div>
 
         {/* Winner & Gap Banner */}
-        <div className="bg-gradient-to-r from-emerald-950/60 via-slate-900 to-slate-900 border border-emerald-500/30 p-6 rounded-2xl mb-8 relative overflow-hidden">
+        <div className="bg-gradient-to-r from-emerald-950/60 via-slate-900 to-slate-900 border border-emerald-500/30 p-6 rounded-2xl relative overflow-hidden">
           <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none" />
           <h3 className="text-xl font-extrabold text-emerald-400 flex items-center gap-2 mb-1">
-            <span>🎉 Leader / Winner:</span>
+            <span>🏆 Leader / Winner:</span>
             <span className="text-white underline">{winner || 'N/A'}</span>
           </h3>
           <p className="text-xs md:text-sm text-slate-300 italic font-medium">
             <span className="font-bold text-emerald-400">Status:</span> {gapMessage}
           </p>
         </div>
-
-        {/* Bulk Winner Email Trigger Button */}
-        <button 
-          onClick={handleAnnounceAndEmail}
-          disabled={isBlasting}
-          className="w-full py-4 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-2xl shadow-lg shadow-emerald-600/20 transition-all duration-200 transform hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed text-sm uppercase tracking-wider flex items-center justify-center gap-2"
-        >
-          {isBlasting ? (
-            <>
-              <svg className="animate-spin h-4 w-4 text-white" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-              </svg>
-              Broadcasting Emails...
-            </>
-          ) : (
-            '📢 Announce Winner & Blast Email to All Voters'
-          )}
-        </button>
 
       </div>
     </div>

@@ -25,7 +25,7 @@ export default function Dashboard() {
                 setCandidates(data);
             } else if (data && data.candidates) {
                 setCandidates(data.candidates);
-                setHasVoted(data.has_voted);
+                setHasVoted(data.has_voted || false);
                 setVotingDisabled(data.voting_disabled || false);
                 if (data.voting_ends_at) {
                     setVotingEndsAt(new Date(data.voting_ends_at));
@@ -231,7 +231,7 @@ export default function Dashboard() {
                                 <div className="flex justify-between items-start mb-6">
                                     <div className="flex items-center gap-3">
                                         <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-slate-100 to-slate-200 border border-slate-200 flex items-center justify-center text-xl font-black text-slate-600 shadow-inner">
-                                            {candidate.name.charAt(0)}
+                                            {candidate.name ? candidate.name.charAt(0) : 'C'}
                                         </div>
                                         <div>
                                             <span className="px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-700 rounded-md border border-slate-200 inline-block mb-1">
